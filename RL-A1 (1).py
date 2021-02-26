@@ -13,7 +13,13 @@ import copy
 import numpy as np
 
 
-# In[189]:
+# In[3]:
+
+
+import time
+
+
+# In[4]:
 
 
 class HexBoard:
@@ -94,12 +100,16 @@ class HexBoard:
                         print("- ",end="")
             print("|")
         print("   -----------------------")
-        
-    def getLegalMove(self):
-        return [k for k,v in self.board.items() if v == HexBoard.EMPTY]
 
 
-# In[190]:
+# In[5]:
+
+
+def getLegalMove(status):
+    return [k for k,v in status.items() if v == HexBoard.EMPTY]
+
+
+# In[6]:
 
 
 class Node:
@@ -130,30 +140,24 @@ class Node:
         return self.children
 
 
-# In[221]:
+# In[7]:
 
 
 def evaluation(status):
     return np.random.randint(-998,998)
 
 
-# In[ ]:
-
-
-def evaluationShortestPath(status):
-
-
-# In[222]:
+# In[8]:
 
 
 INF = 999
 def Alphabeta(status,alpha,beta,depth,maximizingPlayer):
     if depth <= 0:
-        return evaluation(status)
+        return evaluationShortestPath(boardSize,status)
     
     if maximizingPlayer:
         g = -INF
-        legalMoves = getKeys(status,HexBoard.EMPTY)
+        legalMoves = getLegalMove(status)
         for move in legalMoves:
             childStatus = copy.deepcopy(status)
             childStatus[move] = HexBoard.RED
@@ -163,7 +167,7 @@ def Alphabeta(status,alpha,beta,depth,maximizingPlayer):
                 break
     else:
         g = INF
-        legalMoves = getKeys(status,HexBoard.EMPTY)
+        legalMoves = getLegalMove(status)
         for move in legalMoves:
             childStatus = copy.deepcopy(status)
             childStatus[move] = HexBoard.BLUE
@@ -174,38 +178,175 @@ def Alphabeta(status,alpha,beta,depth,maximizingPlayer):
     return g
 
 
-# In[223]:
+# In[9]:
 
 
-def getNextMove(board,maximizingPlayer):
+def getNextMove(status,maximizingPlayer,depth):
     result = []
-    moveList = board.getLegalMove()
+    moveList = getLegalMove(status)
     for move in moveList:
-        status = copy.deepcopy(board.board)
+        newStatus = copy.deepcopy(status)
         if maximizingPlayer:
-            status[move]=HexBoard.BLUE
+            newStatus[move]=HexBoard.BLUE
         else:
-            status[move]=HexBoard.RED
-        result.append(Alphabeta(status,-INF,INF,3,player))
+            newStatus[move]=HexBoard.RED
+        result.append(Alphabeta(newStatus,-INF,INF,depth,maximizingPlayer))
     select = np.argmax(result)
     return moveList[select]
 
 
-# In[226]:
+# In[10]:
 
 
-newBoard = HexBoard(7)
+def status_to_matrix(size, status, color):
+    a = status
+    b = list(a)
+    if color == HexBoard.BLUE:
+        status_matrix = np.zeros([size,size+2])
+        for item in b:
+            x = item[0]
+            y = item[1]
+            if a[item] == color:
+                status_matrix[x,y+1] = 0
+            elif a[item] == HexBoard.EMPTY:
+                status_matrix[x,y+1] = 1
+            else:
+                status_matrix[x,y+1] = 999
+        return status_matrix.T
+    else:
+        status_matrix1 = np.zeros([size+2,size])
+        for item in b:
+            x = item[0]
+            y = item[1]
+            if a[item] == color:
+                status_matrix1[x+1,y] = 0
+            elif a[item] == HexBoard.EMPTY:
+                status_matrix1[x+1,y] = 1
+            else:
+                status_matrix1[x+1,y] = 999
+        return status_matrix1
 
 
-# In[227]:
+# In[11]:
 
 
-while not newBoard.is_game_over():
-    move_minimizing = getNextMove(newBoard,False)
-    newBoard.place(move_minimizing,HexBoard.BLUE)
-    move_maximizing = getNextMove(newBoard,True)
-    newBoard.place(move_maximizing,HexBoard.RED)
-    newBoard.print()
+def search_neighbor(matrix,position):
+    x=position[0]
+    y=position[1]
+    if y>0:
+        neighbor = [(x,y-1),(x+1,y-1),(x+1,y)]
+        value = [matrix[x,y-1],matrix[x+1,y-1],matrix[x+1,y]]
+        score = min(value)
+        index = value.index(score)
+        return score, negihbor[index]
+    else:
+        return matrix[x+1,y],(x+1,y)
+
+def evaluationShortestPath(size,status):
+    matrix = status_to_matrix(status)
+    start = (0,size-1)
+    all_score = 0
+    move_list = []
+    while(x<4):
+        score, start = search_neighbor(matrix,start)
+        all_score = all_score + score
+        #move_list.append(start)
+    return all_score
 
 
-# #END
+# In[31]:
+
+
+def AlphabetaTT(move,board,alpha,beta,depth,maximizingPlayer,TT):
+    bestMove = []
+    for item in TT:
+        if board.board in item:
+            bestMove = item[3]
+            if item[1] >= depth:
+                print('pruning')
+                return item[2]
+        else:
+            bestMove = []
+    
+    if depth <= 0:
+        g = evaluation(board.board)
+        return g
+    
+    elif maximizingPlayer:
+        g = -INF
+        legalMoves = getLegalMove(board.board)
+        for move in bestMove+legalMoves:
+            childStatus = copy.deepcopy(board)
+            childStatus.board[move] = HexBoard.RED
+            gc = AlphabetaTT(move,childStatus,alpha,beta,depth-1,False,TT)
+            if gc > g:
+                bestMove = move
+                g = gc
+            alpha = max(alpha,g)
+            if alpha>=beta:
+                TT.append(board.board,depth,g,bestMove)
+                break
+    elif not maximizingPlayer:
+        g = INF
+        legalMoves = bestMove+getLegalMove(board.board)
+        for move in legalMoves:
+            childStatus = copy.deepcopy(board)
+            childStatus.board[move] = HexBoard.BLUE
+            gc = AlphabetaTT(move,childStatus,alpha,beta,depth-1,False,TT)
+            if gc < g:
+                bestMove = move
+                g = gc
+            beta = min(beta,g)
+            if alpha >=beta:
+                TT.append((board.board,depth,g,bestMove))
+                break
+    return g
+
+
+# In[32]:
+
+
+#Iterative Deepening with Alphabeta_TT
+def getNextMoveWithID(board,maximizingPlayer):
+    TT = []
+    startTime = time.time()
+    depth = 1
+    select = 0
+    while time.time() - startTime < 30:
+        result = []
+        moveList = getLegalMove(board.board)
+        for move in moveList:
+            newStatus = copy.deepcopy(board)
+            if maximizingPlayer:
+                newStatus.board[move]=HexBoard.BLUE
+            else:
+                newStatus.board[move]=HexBoard.RED
+            result.append(AlphabetaTT(move,newStatus,-INF,INF,depth,maximizingPlayer,TT))
+        select = np.argmax(result)
+        depth += 1
+        print('current depth: {}'.format(depth))
+    return moveList[select]
+
+
+# In[33]:
+
+
+board = HexBoard(6)
+
+
+# In[34]:
+
+
+while board.is_game_over:
+    move = getNextMoveWithID(board,True)
+    board.place(move,HexBoard.RED)
+    move = getNextMoveWithID(board,False)
+    board.place(move,HexBoard.BLUE)
+    board.print()
+
+
+# In[ ]:
+
+
+
+
